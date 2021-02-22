@@ -1,0 +1,4 @@
+name = "AseismicGP"
+uuid = "82161b14-01cb-48b6-ae74-3c40ff8e2848"
+authors = ["Jack B. Muir <jmuir@caltech.edu>"]
+version = "0.1.0"
