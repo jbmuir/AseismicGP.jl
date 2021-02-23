@@ -1,5 +1,7 @@
-module AseismicGP2
+module AseismicGP
 
-greet() = print("Hello World!")
+    include("catalog.jl")
+    include("etas.jl")
+    include("branching_process.jl")
 
 end # module
