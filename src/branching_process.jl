@@ -3,47 +3,47 @@ import StatsBase: sample
 using Random
 using Random: AbstractRNG
 
-struct BranchingNode{T<:Real}
+struct BranchingNode{T}
     j::Int # event number
     bweights::Vector{T}
-    BranchingNode{T}(j, bweights) where {T<:Real} = length(bweights) == j ? new(j, bweights) : error("Weights vector must be equal in length to number of events")
+    BranchingNode{T}(j, bweights) where {T} = length(bweights) == j ? new(j, bweights) : error("Weights vector must be equal in length to number of events")
 end
 
-BranchingNode(j, bweights::Vector{T}) where {T<:Real} = BranchingNode{T}(j, bweights)
-BranchingNode(::Type{T}, j) where {T<:Real} = BranchingNode(j, ones(T, j))
+BranchingNode(j, bweights::Vector{T}) where {T} = BranchingNode{T}(j, bweights)
+BranchingNode(::Type{T}, j) where {T} = BranchingNode(j, ones(T, j))
 
-function update_weights!(b::BranchingNode{T}, cat::Catalog{T}, μ::Function, K::T, α::T, c::T, p::T) where {T<:Real}
-    b.bweights[1] = μ(cat.t[b.j]) # probability of being a background event
-    @. b.bweights[2:end] = κ(cat.ΔM[1:(b.j-1)], K, α)*h(cat.t[b.j], cat.t[1:(b.j-1)], c, p)
-    #b.bweights ./= sum(b.bweights) # statsbase automatically normalizes so lets not do this
+function update_weights!(b::BranchingNode{T}, catalog::Catalog{T}, μ::Function, K, α, c, p) where {T}
+    b.bweights[1] = μ(catalog.t[b.j]) # probability of being a background event
+    @. b.bweights[2:end] = κ(catalog.ΔM[1:(b.j-1)], K, α)*h(catalog.t[b.j], catalog.t[1:(b.j-1)], c, p)
+    b.bweights ./= sum(b.bweights) # statsbase automatically normalizes so lets not do this
 end
 
 function StatsBase.sample(rng::AbstractRNG, b::BranchingNode)
     wv = aweights(b.bweights)
-    return sample(rng, wv)
+    return sample(rng, wv) 
 end
 
 StatsBase.sample(b::BranchingNode) = sample(Random.GLOBAL_RNG, b)
 
-struct BranchingProcess{T<:Real}
+struct BranchingProcess{T}
     n::Int # total events
     bnodes::Vector{BranchingNode{T}}
-    BranchingProcess{T}(n, bnodes) where {T<:Real} = length(bnodes) == n ? new(n, bnodes) : error("Branching Nodes vector must be equal in length to the number of events")
+    BranchingProcess{T}(n, bnodes) where {T} = length(bnodes) == n ? new(n, bnodes) : error("Branching Nodes vector must be equal in length to the number of events")
 end
 
-BranchingProcess(n, bnodes::Vector{BranchingNode{T}}) where {T<:Real} = BranchingProcess{T}(n, bnodes)
+BranchingProcess(n, bnodes::Vector{BranchingNode{T}}) where {T} = BranchingProcess{T}(n, bnodes)
 
-BranchingProcess(::Type{T}, n) where {T<:Real} = BranchingProcess(n, [BranchingNode(T, j) for j = 1:n])
+BranchingProcess(::Type{T}, n) where {T} = BranchingProcess(n, [BranchingNode(T, j) for j = 1:n])
 
-function update_weights!(b::BranchingProcess{T}, cat::Catalog{T},  μ::Function, K::T, α::T, c::T, p::T) where {T<:Real}
+function update_weights!(b::BranchingProcess{T}, catalog::Catalog{T},  μ::Function, K, α, c, p) where {T}
     for i = 1:b.n
-        update_weights!(b.bnodes[i], cat, μ::Function, K::T, α::T, c::T, p::T)
+        update_weights!(b.bnodes[i], catalog, μ, K, α, c, p)
     end
 end
 
 function StatsBase.sample!(rng::AbstractRNG, b::BranchingProcess, x::Vector{Int})
     for i = 1:b.n
-        x[i] = sample(b.bnodes[i])
+        x[i] = sample(rng, b.bnodes[i])
     end
 end
 

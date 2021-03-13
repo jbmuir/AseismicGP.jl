@@ -25,4 +25,6 @@ Manifest.toml
 
 #VSCode files
 .vscode
+#Mac Files
+.DS_Store
 
