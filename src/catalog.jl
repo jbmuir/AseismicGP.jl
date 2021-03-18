@@ -80,17 +80,17 @@ function simulate_ETAS(model::ETASInhomogeneousPP{T}, t_end::T, b::T, rng = Mers
     p = model.p
     while t_now < t_end
         if length(t) > 0
-            ν = K * sum(exp.(α.*M) .* (t_now + c .- t).^-p) 
+            ν = sum(κ.(M, K, α) .* h.(t_now, t, c, p))
         else
             ν = zero(T)
         end
         λ̄ = μ(t_now) + ν
-        u = rand(rng, T, 1)[1]
+        u = rand(rng, T)
         w = -log(u)/λ̄
         t_now = t_now  + w
-        D = rand(rng, T, 1)[1]
+        D = rand(rng, T)
         if length(t) > 0
-            ν = K * sum(exp.(α.*M) .* (t_now + c .- t).^-p) 
+            ν = sum(κ.(M, K, α) .* h.(t_now, t, c, p))
         else
             ν = zero(T)
         end

@@ -15,7 +15,7 @@ BranchingNode(::Type{T}, j) where {T} = BranchingNode(j, ones(T, j))
 function update_weights!(b::BranchingNode{T}, catalog::Catalog{T}, μ::Function, K, α, c, p) where {T}
     b.bweights[1] = μ(catalog.t[b.j]) # probability of being a background event
     @. b.bweights[2:end] = κ(catalog.ΔM[1:(b.j-1)], K, α)*h(catalog.t[b.j], catalog.t[1:(b.j-1)], c, p)
-    b.bweights ./= sum(b.bweights) # statsbase automatically normalizes so lets not do this
+    b.bweights ./= sum(b.bweights) 
 end
 
 function StatsBase.sample(rng::AbstractRNG, b::BranchingNode)
