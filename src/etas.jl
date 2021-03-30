@@ -1,5 +1,3 @@
-using Distributions
-
 # Δmᵢ is mᵢ - M₀; i.e. relative to cutoff magnitude choice
 κ(Δmᵢ, K, α) = K*exp(α*Δmᵢ)
 # p > 1! 
