@@ -5,7 +5,6 @@ using DynamicHMC
 using DeepGaussianSPDEProcesses
 using LinearAlgebra
 using SparseArrays
-using LoopVectorization
 
 export ETASPriors, ConstantRateParameters
 export SPDELayerPriors, OneLayerRateParameters
@@ -97,30 +96,14 @@ function count1(x)
     return s
 end
 
-function etas_log_likelihood(K, α, c, p, x, catalog, Tspan)
-    cx = counts(x, length(x)+1)
-    nS = @views cx[2:end]
-    etasloglikvec = κ.(catalog.ΔM, K, α)
-    etasloglikvec .= -etasloglikvec.*H.(Tspan, catalog.t, c, p) .+ nS.*log.(etasloglikvec)
-    etasloglik = sum(etasloglikvec)
-    for i in eachindex(x)
-        j = x[i]
-        etasloglik += log(h(catalog.t[i], catalog.t[j], c, p))
-    end
-    return etasloglik
-end
-
-function etas_log_likelihood2(K::T, α::T, c::T, p::T, x, catalog, Tspan) where {T<:Real}
+function etas_log_likelihood(K::T, α::T, c::T, p::T, x, catalog, Tspan) where {T<:Real}
     cx = counts(x, length(x)+1)
     nS = @views cx[2:end]
     etasloglik = zero(T)
-    @avx for i in 1:length(catalog)
-        κm = κ(catalog.ΔM[i], K, α)
-        etasloglik = etasloglik - km*H(Tspan, catalog.t[i], c, p) + nS[i]*log(κm)
-    end
-    @avx for i in 1:length(catalog)
+    for i in 1:length(catalog)
         j = x[i]
-        etasloglik += log(h(catalog.t[i], catalog.t[j], c, p))
+        κm = κ(catalog.ΔM[i], K, α)
+        etasloglik = etasloglik - κm*H(Tspan, catalog.t[i], c, p) + nS[i]*log(κm) + log(h(catalog.t[i], catalog.t[j], c, p))
     end
     return etasloglik
 end
