@@ -1,10 +1,10 @@
-using Distributions: MersenneTwister, Exponential
+using Distributions: MersenneTwister, Exponential, Poisson
 using Dates: DateTime
 import Base: length, maximum, minimum
 
 export AbstractCatalog, Catalog, NormalizedCatalog
 export ETASInhomogeneousPP
-export simulate_ETAS
+export simulate_ETAS, simulate_Poisson
 
 abstract type AbstractCatalog end
 
@@ -31,8 +31,31 @@ struct ETASInhomogeneousPP{T <: Real}
     μ :: Function
     K::T
     α::T
-    p::T
     c::T
+    p::T
+    ETASInhomogeneousPP(μ, K::T, α::T, c::T, p::T) where T = p < 1 ? error("p must be >= 1") : new{T}(μ, K, α, c, p)
+end
+
+function simulate_Poisson(μ::T, t_end::T, b::T, rng = MersenneTwister(43771120)) where {T <: Real}
+    t = T[]
+    M = T[]
+    t_now = zero(T)
+    β = b * convert(T, log(10))
+    scale = one(T) / β
+    while t_now < t_end
+        u = rand(rng, T)
+        D = rand(rng, T) # extra call to rand to synchronize the RNG with simulate_ETAS so that the catalogs are identical if K = 0
+
+        w = -log(u)/μ
+        t_now += w
+        if t_now > t_end
+            break
+        else
+            push!(M, rand(rng, Exponential(scale)))
+            push!(t, t_now)
+        end        
+    end
+    return Catalog(t, M, zero(T), missing, t_end) 
 end
 
 function simulate_ETAS(model::ETASInhomogeneousPP{T}, t_end::T, b::T, rng = MersenneTwister(43771120)) where {T <: Real}
