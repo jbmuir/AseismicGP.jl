@@ -12,10 +12,10 @@ end
 BranchingNode(j, bweights::Vector{T}) where {T} = BranchingNode{T}(j, bweights)
 BranchingNode(::Type{T}, j) where {T} = BranchingNode(j, ones(T, j))
 
-function update_weights!(b::BranchingNode{T}, catalog::Catalog{T}, μ::Function, K, α, c, p) where {T}
-    b.bweights[1] = μ(catalog.t[b.j]) # probability of being a background event
+function update_weights!(b::BranchingNode{T}, catalog::Catalog{T}, μ, K, α, c, p) where {T}
+    b.bweights[1] = μ # probability of being a background event
     @. b.bweights[2:end] = κ(catalog.ΔM[1:(b.j-1)], K, α)*h(catalog.t[b.j], catalog.t[1:(b.j-1)], c, p)
-    b.bweights ./= sum(b.bweights) # statsbase automatically normalizes so lets not do this
+    b.bweights ./= sum(b.bweights) 
 end
 
 function StatsBase.sample(rng::AbstractRNG, b::BranchingNode)
@@ -35,9 +35,15 @@ BranchingProcess(n, bnodes::Vector{BranchingNode{T}}) where {T} = BranchingProce
 
 BranchingProcess(::Type{T}, n) where {T} = BranchingProcess(n, [BranchingNode(T, j) for j = 1:n])
 
-function update_weights!(b::BranchingProcess{T}, catalog::Catalog{T},  μ::Function, K, α, c, p) where {T}
+function update_weights!(b::BranchingProcess{T}, catalog::Catalog{T},  μ::T, K, α, c, p) where {T}
     for i = 1:b.n
         update_weights!(b.bnodes[i], catalog, μ, K, α, c, p)
+    end
+end
+
+function update_weights!(b::BranchingProcess{T}, catalog::Catalog{T},  μ::Vector{T}, K, α, c, p) where {T}
+    for i = 1:b.n
+        update_weights!(b.bnodes[i], catalog, μ[i], K, α, c, p)
     end
 end
 
