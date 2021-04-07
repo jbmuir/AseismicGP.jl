@@ -105,7 +105,7 @@ function etas_log_likelihood(K::T, α::T, c::T, p::T, x, catalog, Tspan) where {
         κm = κ(catalog.ΔM[i], K, α)
         etasloglik -= κm*H(Tspan, catalog.t[i], c, p) 
         etasloglik += nS[i]*log(κm) 
-        if j != 0
+        if j != 0 # don't add this next term for events with the background as the parent
             etasloglik += log(h(catalog.t[i], catalog.t[j], c, p))
         end
     end
