@@ -101,9 +101,13 @@ function etas_log_likelihood(K::T, α::T, c::T, p::T, x, catalog, Tspan) where {
     nS = @views cx[2:end]
     etasloglik = zero(T)
     for i in 1:length(catalog)
-        j = x[i]
+        j = x[i]-1
         κm = κ(catalog.ΔM[i], K, α)
-        etasloglik = etasloglik - κm*H(Tspan, catalog.t[i], c, p) + nS[i]*log(κm) + log(h(catalog.t[i], catalog.t[j], c, p))
+        etasloglik -= κm*H(Tspan, catalog.t[i], c, p) 
+        etasloglik += nS[i]*log(κm) 
+        if j != 0
+            etasloglik += log(h(catalog.t[i], catalog.t[j], c, p))
+        end
     end
     return etasloglik
 end
