@@ -1,11 +1,3 @@
-using Distributions: MersenneTwister, Exponential, Poisson
-using Dates: DateTime
-import Base: length, maximum, minimum
-
-export AbstractCatalog, Catalog, NormalizedCatalog
-export ETASInhomogeneousPP
-export simulate_ETAS, simulate_Poisson
-
 abstract type AbstractCatalog end
 
 Base.length(cat :: AbstractCatalog) = Base.length(cat.t)

@@ -1,8 +1,3 @@
-using StatsBase
-import StatsBase: sample
-using Random
-using Random: AbstractRNG
-
 struct BranchingNode{T}
     j::Int # event number
     bweights::Vector{T}
