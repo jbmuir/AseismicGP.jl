@@ -5,12 +5,6 @@ struct ETASPriors
     p̃prior
 end
 
-struct SPDELayerPriors
-    μ₀prior
-    lprior
-    σprior
-end
-
 function hatsum(fx::Vector{T}) where T
     s = zero(T)
     s += fx[1] / 2
@@ -55,6 +49,13 @@ function count1(x)
         end
     end
     return s
+end
+
+function smoothclamp(x, low, high)
+    r = high - low
+    x = clamp((x-low) / r, 0, 1)
+    xi = x * x * (3 - 2 * x)
+    return xi * r + low
 end
 
 function etas_log_likelihood(K::T, α::T, c::T, p::T, x, catalog, Tspan) where {T<:Real}
