@@ -26,7 +26,7 @@ export AbstractCatalog, Catalog, NormalizedCatalog
 export ETASInhomogeneousPP
 export simulate_ETAS, simulate_Poisson
 
-export ETASPriors
+export ETASPriors, ScalarSPDELayerPriors, VectorSPDELayerPriors
 export ConstantRateParameters, OneLayerRateParameters, TwoLayerRateParameters
 export etas_sampling
 

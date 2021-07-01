@@ -5,6 +5,17 @@ struct ETASPriors
     p̃prior
 end
 
+struct ScalarSPDELayerPriors
+    μprior
+    lprior
+    σprior
+end
+
+struct VectorSPDELayerPriors
+   μprior
+   σprior
+end
+
 function hatsum(fx::Vector{T}) where T
     s = zero(T)
     s += fx[1] / 2
@@ -56,6 +67,20 @@ function smoothclamp(x, low, high)
     x = clamp((x-low) / r, 0, 1)
     xi = x * x * (3 - 2 * x)
     return xi * r + low
+end
+
+sigmoid(x) = 1/(1 + exp(-x))
+isigmoid(x) = log(x/(1-x))
+
+function clamp_w_scale(τ, lrange, lmin, lscale)
+	lfactor = isigmoid((lscale-lmin)/(lmax-lmin))
+	l = lrange * sigmoid(τ+lfactor) + lmin 
+	return l
+end
+
+function sigmoid_clamp(τ, lrange, lmin)
+	l = lrange * sigmoid(τ) + lmin 
+	return l
 end
 
 function etas_log_likelihood(K::T, α::T, c::T, p::T, x, catalog, Tspan) where {T<:Real}
