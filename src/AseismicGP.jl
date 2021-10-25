@@ -8,6 +8,7 @@ using DynamicHMC
 using DeepGaussianSPDEProcesses
 using LinearAlgebra
 using SparseArrays
+using LoopVectorization
 using Distributions: MersenneTwister, Exponential, Poisson, Normal
 using Dates: DateTime
 import Base: length, maximum, minimum
@@ -28,6 +29,6 @@ export simulate_ETAS, simulate_Poisson
 
 export ETASPriors, ScalarSPDELayerPriors, VectorSPDELayerPriors
 export ConstantRateParameters, OneLayerRateParameters, TwoLayerRateParameters
-export etas_sampling
+export etas_sampling, ipp_sampling
 
 end

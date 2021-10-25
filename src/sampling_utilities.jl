@@ -62,6 +62,23 @@ function count1(x)
     return s
 end
 
+function logsum(μ::Vector{T}) where T
+    s = zero(T)
+    @turbo for i ∈ eachindex(μ)
+        s += log(μ[i])
+    end
+    return s
+end
+
+function logsum1(μ::Vector{T}, x) where T
+    s = zero(T)
+    n = length(μ)
+    @inbounds for i ∈ 1:n
+        s += (x[i] == 1 ? log(μ[i]) : zero(T))
+    end
+    return s
+end
+
 function smoothclamp(x, low, high)
     r = high - low
     x = clamp((x-low) / r, 0, 1)

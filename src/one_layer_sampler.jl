@@ -51,7 +51,7 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRat
 
         μ = μ₁ .* exp.(M(smoothclamp(l₁, lmin, lmax), σ₁, w₁))
         μi = S*μ
-        Turing.@addlogprob! sum(log.(μi[x.==1])) - hatsum(μ)*params.M.h
+        Turing.@addlogprob! logsum1(μi,x) - hatsum(μ)*params.M.h
 
         #=
         setup latent branching process:
@@ -76,10 +76,16 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRat
     
     etas_model =  ETASModel()
 
-    etas_sampler = Gibbs(DynamicNUTS{Turing.ForwardDiffAD{params.M.N}}(:w₁),
-                         DynamicNUTS{Turing.ForwardDiffAD{3}}(:μ₁, :l₁, :σ₁),
+    # etas_sampler = Gibbs(DynamicNUTS{Turing.ForwardDiffAD{params.M.N}}(:w₁),
+    #                      DynamicNUTS{Turing.ForwardDiffAD{3}}(:μ₁, :l₁, :σ₁),
+    #                      GibbsConditional(:x, cond_x), 
+    #                      DynamicNUTS{Turing.ForwardDiffAD{4}}(:K, :α, :c, :p̃))
+
+    etas_sampler = Gibbs(Turing.ESS(:w₁),
+                         HMC{Turing.ForwardDiffAD{3}}(0.01, 10, :μ₁, :l₁, :σ₁),
                          GibbsConditional(:x, cond_x), 
-                         DynamicNUTS{Turing.ForwardDiffAD{4}}(:K, :α, :c, :p̃))
+                         HMC{Turing.ForwardDiffAD{4}}(0.01, 10, :K, :α, :c, :p̃))
+
 
     if threads
         etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
@@ -91,4 +97,45 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRat
                                                :internals => [Symbol("x[$i]") for i in 1:length(catalog.t)], 
                                                :logposterior => [:lp]))
     return (etas_model, etas_chain)
+end
+
+
+function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRateParameters{T}; threads=false) where {T<:Real}
+
+    L₁priors = params.spdepriors
+    M = params.M
+    S = hatinterpolationmatrix(zero(T):params.M.h:params.Tspan, catalog.t)
+    wprior = MvNormal(params.M.N, one(T))
+    lmin = params.M.h
+    lmax = params.Tspan
+
+    @model IPPModel() = begin
+
+        #assign priors for the SPDE layer
+        μ₁ ~ L₁priors.μprior
+        l₁ ~ L₁priors.lprior
+        σ₁ ~ L₁priors.σprior
+        w₁ ~ wprior
+
+        μ = μ₁ .* exp.(M(smoothclamp(l₁, lmin, lmax), σ₁, w₁))
+        μi = S*μ
+        Turing.@addlogprob! logsum(μi) - hatsum(μ)*params.M.h
+
+        return μ
+    end
+
+    ipp_model =  IPPModel()
+
+    ipp_sampler = Gibbs(ESS(:w₁), HMC{Turing.ForwardDiffAD{3}}(0.01, 10, :μ₁, :l₁, :σ₁))
+                        # HMCDA{Turing.ForwardDiffAD{3}}(div(nsteps,4), 0.65, 0.1, :μ₁, :l₁, :σ₁))
+
+    if threads
+        ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains)
+    else
+        ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains)
+    end
+    ipp_chain = set_section(ipp_chain,  Dict(:parameters => [:μ₁,:l₁,:σ₁],
+                                               :spdelatent => [Symbol("w₁[$i]") for i in 1:params.M.N],
+                                               :logposterior => [:lp]))
+    return (ipp_model, ipp_chain)
 end

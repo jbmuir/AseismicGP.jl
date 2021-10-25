@@ -32,7 +32,6 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::TwoLayerRat
     wprior = MvNormal(params.M.N, one(T))
     lmin = params.M.h
     lmax = params.Tspan
-    clamp(l) = sigmoid_clamp(l, lmax-lmin, lmin)
 
     @model ETASModel() = begin
         # assign dummy priors for x so that Turing knows it exists
@@ -58,7 +57,7 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::TwoLayerRat
         l₂ = μ₁ .* exp.(M(smoothclamp(l₁, lmin, lmax), σ₁, w₁))
         μ = μ₂ .* exp.(M(smoothclamp.(l₂, lmin, lmax), σ₂, w₂))
         μi = S*μ
-        Turing.@addlogprob! sum(log.(μi[x.==1])) - hatsum(μ)*params.M.h
+        Turing.@addlogprob! logsum1(μi,x) - hatsum(μ)*params.M.h
 
         #=
         setup latent branching process:
@@ -84,9 +83,16 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::TwoLayerRat
     
     etas_model =  ETASModel()
 
-    etas_sampler = Gibbs(DynamicNUTS{Turing.ForwardDiffAD{params.M.N}}(:w₁),
+    # etas_sampler = Gibbs(DynamicNUTS{Turing.ForwardDiffAD{params.M.N}}(:w₁),
+    #                      DynamicNUTS{Turing.ForwardDiffAD{3}}(:μ₁, :l₁, :σ₁),
+    #                      DynamicNUTS{Turing.ForwardDiffAD{params.M.N}}(:w₂),
+    #                      DynamicNUTS{Turing.ForwardDiffAD{2}}(:μ₂, :σ₂),
+    #                      GibbsConditional(:x, cond_x), 
+    #                      DynamicNUTS{Turing.ForwardDiffAD{4}}(:K, :α, :c, :p̃))
+
+    etas_sampler = Gibbs(ESS(:w₁),
                          DynamicNUTS{Turing.ForwardDiffAD{3}}(:μ₁, :l₁, :σ₁),
-                         DynamicNUTS{Turing.ForwardDiffAD{params.M.N}}(:w₂),
+                         ESS(:w₂),
                          DynamicNUTS{Turing.ForwardDiffAD{2}}(:μ₂, :σ₂),
                          GibbsConditional(:x, cond_x), 
                          DynamicNUTS{Turing.ForwardDiffAD{4}}(:K, :α, :c, :p̃))
@@ -102,4 +108,53 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::TwoLayerRat
                                                :internals => [Symbol("x[$i]") for i in 1:length(catalog.t)], 
                                                :logposterior => [:lp]))
     return (etas_model, etas_chain)
+end
+
+
+function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::TwoLayerRateParameters{T}; threads=false) where {T<:Real}
+
+    L₁Priors = params.spde1priors
+    L₂Priors = params.spde2priors
+    M = params.M
+    S = hatinterpolationmatrix(zero(T):params.M.h:params.Tspan, catalog.t)
+    wprior = MvNormal(params.M.N, one(T))
+    lmin = params.M.h
+    lmax = params.Tspan
+
+    @model IPPModel() = begin
+        #assign priors for the SPDE layers
+        μ₁ ~ L₁Priors.μprior
+        l₁ ~ L₁Priors.lprior
+        σ₁ ~ L₁Priors.σprior
+        w₁ ~ wprior
+        μ₂ ~ L₂Priors.μprior
+        σ₂ ~ L₂Priors.σprior
+        w₂ ~ wprior
+
+        l₂ = μ₁ .* exp.(M(smoothclamp(l₁, lmin, lmax), σ₁, w₁))
+        μ = μ₂ .* exp.(M(smoothclamp.(l₂, lmin, lmax), σ₂, w₂))
+        μi = S*μ
+        Turing.@addlogprob! logsum(μi) - hatsum(μ)*params.M.h
+
+        return (μ, l₂)
+    end
+
+    
+    ipp_model =  IPPModel()
+
+    ipp_sampler = Gibbs(ESS(:w₁),
+                         HMC{Turing.ForwardDiffAD{3}}(0.01, 10, :μ₁, :l₁, :σ₁),
+                         ESS(:w₂),
+                         HMC{Turing.ForwardDiffAD{2}}(0.01, 10, :μ₂, :σ₂))
+
+    if threads
+        ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains)
+    else
+        ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains)
+    end
+    ipp_chain = set_section(ipp_chain,  Dict(:parameters => [:μ₁,:l₁,:σ₁,:μ₂,:σ₂],
+                                               :spdelatent1 => [Symbol("w₁[$i]") for i in 1:params.M.N], 
+                                               :spdelatent2 => [Symbol("w₂[$i]") for i in 1:params.M.N], 
+                                               :logposterior => [:lp]))
+    return (ipp_model, ipp_chain)
 end
