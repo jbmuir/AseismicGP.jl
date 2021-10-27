@@ -71,3 +71,29 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRat
                                                :logposterior => [:lp]))
     return (etas_model, etas_chain)
 end
+
+function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRateParameters{T}; threads=false) where {T<:Real}
+    nev = length(catalog)
+    Tspan = params.Tspan
+    λ_obs = nev/Tspan
+    μp_dummy = Gamma(params.μα, inv(params.μβ))
+
+
+    @model IPPModel() = begin #note that even though we call this an IPP model for consistancy with more layers, it is in fact a homogenous model
+        μ ~ μp_dummy
+        λ_obs ~ Poisson(μ)
+        return μ
+    end
+
+    ipp_model =  IPPModel()
+
+    ipp_sampler = HMC{Turing.ForwardDiffAD{1}}(0.01, 10, :μ)
+
+    if threads
+        ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains)
+    else
+        ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains)
+    end
+    ipp_chain = set_section(ipp_chain,  Dict(:parameters => [:μ], :logposterior => [:lp]))
+    return (ipp_model, ipp_chain)
+end
