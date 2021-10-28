@@ -5,7 +5,7 @@ struct ConstantRateParameters{T<:Real}
     etaspriors::ETASPriors
 end
 
-function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRateParameters{T}; threads=false) where {T<:Real}
+function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRateParameters{T}; threads=false, init_theta=nothing) where {T<:Real}
 
     b = BranchingProcess(T, length(catalog.t))
     xp_dummy = Product([Categorical(inv(i) .* ones(i)) for i = 1:length(catalog.t)]) 
@@ -60,19 +60,30 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRat
                          GibbsConditional(:x, cond_x), 
                          DynamicNUTS{Turing.ForwardDiffAD{4}}(:K, :α, :c, :p̃))
 
-
-    if threads
-        etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
+    if init_theta !== nothing
+        varinfo = Turing.VarInfo(etas_model);
+        etas_model(varinfo, Turing.SampleFromPrior(), Turing.PriorContext(init_theta));
+        init_theta_arr = varinfo[Turing.SampleFromPrior()]
+        if threads
+            etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains, init_params = init_theta_arr)
+        else
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains, init_params = init_theta_arr)
+        end
     else
-        etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains)
+        if threads
+            etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
+        else
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat)
+        end
     end
+
     etas_chain = set_section(etas_chain,  Dict(:parameters => [:K,:α,:c,:p̃,:μ], 
                                                :internals => [Symbol("x[$i]") for i in 1:length(catalog.t)], 
                                                :logposterior => [:lp]))
     return (etas_model, etas_chain)
 end
 
-function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRateParameters{T}; threads=false) where {T<:Real}
+function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRateParameters{T}; threads=false, init_theta=nothing) where {T<:Real}
     nev = length(catalog)
     Tspan = params.Tspan
     λ_obs = nev/Tspan
@@ -89,11 +100,23 @@ function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRate
 
     ipp_sampler = HMC{Turing.ForwardDiffAD{1}}(0.01, 10, :μ)
 
-    if threads
-        ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains)
+    if init_theta !== nothing
+        varinfo = Turing.VarInfo(ipp_model);
+        ipp_model(varinfo, Turing.SampleFromPrior(), Turing.PriorContext(init_theta));
+        init_theta_arr = varinfo[Turing.SampleFromPrior()]
+        if threads
+            ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains, init_params = init_theta_arr)
+        else
+            ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains, init_params = init_theta_arr)
+        end
     else
-        ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains)
+        if threads
+            ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains)
+        else
+            ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains)
+        end
     end
+
     ipp_chain = set_section(ipp_chain,  Dict(:parameters => [:μ], :logposterior => [:lp]))
     return (ipp_model, ipp_chain)
 end

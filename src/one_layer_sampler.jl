@@ -17,7 +17,7 @@ function OneLayerRateParameters(Tspan::T,
     return OneLayerRateParameters(Tspan, M, spdepriors, etaspriors)
 end
 
-function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRateParameters{T}; threads=false) where {T<:Real}
+function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRateParameters{T}; threads=false, init_theta=nothing) where {T<:Real}
 
     ETASPriors = params.etaspriors
     L₁priors = params.spdepriors
@@ -76,22 +76,28 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRat
     
     etas_model =  ETASModel()
 
-    # etas_sampler = Gibbs(DynamicNUTS{Turing.ForwardDiffAD{params.M.N}}(:w₁),
-    #                      DynamicNUTS{Turing.ForwardDiffAD{3}}(:μ₁, :l₁, :σ₁),
-    #                      GibbsConditional(:x, cond_x), 
-    #                      DynamicNUTS{Turing.ForwardDiffAD{4}}(:K, :α, :c, :p̃))
-
     etas_sampler = Gibbs(Turing.ESS(:w₁),
                          HMC{Turing.ForwardDiffAD{3}}(0.01, 10, :μ₁, :l₁, :σ₁),
                          GibbsConditional(:x, cond_x), 
                          HMC{Turing.ForwardDiffAD{4}}(0.01, 10, :K, :α, :c, :p̃))
 
-
-    if threads
-        etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
+    if init_theta !== nothing
+        varinfo = Turing.VarInfo(etas_model);
+        etas_model(varinfo, Turing.SampleFromPrior(), Turing.PriorContext(init_theta));
+        init_theta_arr = varinfo[Turing.SampleFromPrior()]
+        if threads
+            etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains, init_params = init_theta_arr)
+        else
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains, init_params = init_theta_arr)
+        end
     else
-        etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains)
+        if threads
+            etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
+        else
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat)
+        end
     end
+
     etas_chain = set_section(etas_chain,  Dict(:parameters => [:K,:α,:c,:p̃,:μ₁,:l₁,:σ₁],
                                                :spdelatent => [Symbol("w₁[$i]") for i in 1:params.M.N], 
                                                :internals => [Symbol("x[$i]") for i in 1:length(catalog.t)], 
@@ -100,7 +106,7 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRat
 end
 
 
-function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRateParameters{T}; threads=false) where {T<:Real}
+function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRateParameters{T}; threads=false, init_theta=nothing) where {T<:Real}
 
     L₁priors = params.spdepriors
     M = params.M
@@ -127,13 +133,24 @@ function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRate
     ipp_model =  IPPModel()
 
     ipp_sampler = Gibbs(ESS(:w₁), HMC{Turing.ForwardDiffAD{3}}(0.01, 10, :μ₁, :l₁, :σ₁))
-                        # HMCDA{Turing.ForwardDiffAD{3}}(div(nsteps,4), 0.65, 0.1, :μ₁, :l₁, :σ₁))
 
-    if threads
-        ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains)
+    if init_theta !== nothing
+        varinfo = Turing.VarInfo(ipp_model);
+        ipp_model(varinfo, Turing.SampleFromPrior(), Turing.PriorContext(init_theta));
+        init_theta_arr = varinfo[Turing.SampleFromPrior()]
+        if threads
+            ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains, init_params = init_theta_arr)
+        else
+            ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains, init_params = init_theta_arr)
+        end
     else
-        ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains)
+        if threads
+            ipp_chain = sample(ipp_model, ipp_sampler, MCMCThreads(), nsteps, nchains)
+        else
+            ipp_chain = mapreduce(c -> sample(ipp_model, ipp_sampler, nsteps), chainscat, 1:nchains)
+        end
     end
+
     ipp_chain = set_section(ipp_chain,  Dict(:parameters => [:μ₁,:l₁,:σ₁],
                                                :spdelatent => [Symbol("w₁[$i]") for i in 1:params.M.N],
                                                :logposterior => [:lp]))
