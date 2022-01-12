@@ -84,11 +84,11 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::TwoLayerRat
     etas_model =  ETASModel()
 
     etas_sampler = Gibbs(ESS(:w₁),
-                         DynamicNUTS{Turing.ForwardDiffAD{3}}(:μ₁, :l₁, :σ₁),
+                         HMC{Turing.ForwardDiffAD{3}}(0.01, 10, :μ₁, :l₁, :σ₁),
                          ESS(:w₂),
-                         DynamicNUTS{Turing.ForwardDiffAD{2}}(:μ₂, :σ₂),
+                         HMC{Turing.ForwardDiffAD{2}}(0.01, 10, :μ₂, :σ₂),
                          GibbsConditional(:x, cond_x), 
-                         DynamicNUTS{Turing.ForwardDiffAD{4}}(:K, :α, :c, :p̃))
+                         HMC{Turing.ForwardDiffAD{4}}(0.01, 10, :K, :α, :c, :p̃))
 
     if init_theta !== nothing
         varinfo = Turing.VarInfo(etas_model);
