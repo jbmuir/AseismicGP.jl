@@ -4,7 +4,6 @@ using StatsBase
 import StatsBase: sample
 using MCMCChains
 using Turing
-using DynamicHMC
 using DeepGaussianSPDEProcesses
 using LinearAlgebra
 using SparseArrays

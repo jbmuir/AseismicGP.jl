@@ -58,7 +58,7 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRat
 
     etas_sampler = Gibbs(GibbsConditional(:μ, cond_μ),
                          GibbsConditional(:x, cond_x), 
-                         DynamicNUTS{Turing.ForwardDiffAD{4}}(:K, :α, :c, :p̃))
+                         HMC{Turing.ForwardDiffAD{4}}(0.01, 10, :K, :α, :c, :p̃))
 
     if init_theta !== nothing
         varinfo = Turing.VarInfo(etas_model);
