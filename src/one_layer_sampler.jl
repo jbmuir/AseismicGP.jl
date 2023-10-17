@@ -94,7 +94,7 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRat
         if threads
             etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
         else
-            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat)
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains)
         end
     end
 
@@ -155,4 +155,57 @@ function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::OneLayerRate
                                                :spdelatent => [Symbol("w₁[$i]") for i in 1:params.M.N],
                                                :logposterior => [:lp]))
     return (ipp_model, ipp_chain)
+end
+
+function etas_priorsampling(nsteps, nchains, params::OneLayerRateParameters{T}; threads=false, init_theta=nothing) where {T<:Real}
+
+    ETASPriors = params.etaspriors
+    L₁priors = params.spdepriors
+    M = params.M
+    wprior = MvNormal(params.M.N, one(T))
+    lmin = params.M.h
+    lmax = params.Tspan
+
+    @model ETASModel() = begin
+        #assign priors for the SPDE layer
+        μ₁ ~ L₁priors.μprior
+        l₁ ~ L₁priors.lprior
+        σ₁ ~ L₁priors.σprior
+        w₁ ~ wprior
+        # assign priors for ETAS parameters
+        K ~ ETASPriors.Kprior
+        α ~ ETASPriors.αprior
+        c ~ ETASPriors.cprior
+        p̃ ~ ETASPriors.p̃prior
+        p = p̃ + 1
+        μ = μ₁ .* exp.(M(smoothclamp(l₁, lmin, lmax), σ₁, w₁))
+        return μ
+    end
+    etas_model =  ETASModel()
+
+    etas_sampler = Gibbs(Turing.ESS(:w₁),
+                         HMC{Turing.ForwardDiffAD{3}}(0.01, 10, :μ₁, :l₁, :σ₁),
+                         HMC{Turing.ForwardDiffAD{4}}(0.01, 10, :K, :α, :c, :p̃))
+
+    if init_theta !== nothing
+        varinfo = Turing.VarInfo(etas_model);
+        etas_model(varinfo, Turing.SampleFromPrior(), Turing.PriorContext(init_theta));
+        init_theta_arr = varinfo[Turing.SampleFromPrior()]
+        if threads
+            etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains, init_params = init_theta_arr)
+        else
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains, init_params = init_theta_arr)
+        end
+    else
+        if threads
+            etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
+        else
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains)
+        end
+    end
+
+    etas_chain = set_section(etas_chain,  Dict(:parameters => [:K,:α,:c,:p̃,:μ₁,:l₁,:σ₁],
+                                               :spdelatent => [Symbol("w₁[$i]") for i in 1:params.M.N], 
+                                               :logposterior => [:lp]))
+    return (etas_model, etas_chain)
 end

@@ -115,3 +115,31 @@ function etas_log_likelihood(K::T, α::T, c::T, p::T, x, catalog, Tspan) where {
     end
     return etasloglik
 end
+
+function log_likelihood_per_event(K::T, α::T, c::T, p::T, μ, S, x, catalog, Tspan) where {T<:Real}
+    cx = counts(x, length(x)+1)
+    nS = @views cx[2:end]
+    etasloglik = zero(T)
+    if per_sample_log_lik
+        etasloglik_arr = zeros(T, length(catalog))
+    end
+    for i in 1:length(catalog)
+        j = x[i]-1
+        κm = κ(catalog.ΔM[i], K, α)
+        term1 = κm*H(Tspan, catalog.t[i], c, p) 
+        term2 = nS[i]*log(κm) 
+        etasloglik -= term1
+        etasloglik += term2
+        if per_sample_log_lik
+            
+        end
+        if j != 0 # don't add this next term for events with the background as the parent
+            etasloglik += log(h(catalog.t[i], catalog.t[j], c, p))
+        end
+    end
+    if per_sample_log_lik
+        return (etasloglik, etasloglik_arr)
+    else
+        return etasloglik
+    end
+end

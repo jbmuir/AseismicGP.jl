@@ -73,7 +73,7 @@ function etas_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRat
         if threads
             etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
         else
-            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat)
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains)
         end
     end
 
@@ -119,4 +119,48 @@ function ipp_sampling(nsteps, nchains, catalog::Catalog{T}, params::ConstantRate
 
     ipp_chain = set_section(ipp_chain,  Dict(:parameters => [:μ], :logposterior => [:lp]))
     return (ipp_model, ipp_chain)
+end
+
+
+function etas_priorsampling(nsteps, nchains, params::ConstantRateParameters{T}; threads=false, init_theta=nothing) where {T<:Real}
+    μp_dummy = Gamma(params.μα, inv(params.μβ))
+
+    @model ETASModel(Kprior, αprior, cprior, p̃prior, μp_dummy) = begin
+        # assign dummy priors for x and μ so that Turing knows they exist
+        μ ~ μp_dummy
+        # assign priors for ETAS parameters
+        K ~ Kprior
+        α ~ αprior
+        c ~ cprior
+        p̃ ~ p̃prior
+        p = p̃ + 1
+        return μ
+    end
+
+    etas_model = ETASModel(params.etaspriors.Kprior, 
+                           params.etaspriors.αprior, 
+                           params.etaspriors.cprior, 
+                           params.etaspriors.p̃prior, 
+                           μp_dummy)
+
+    etas_sampler = HMC{Turing.ForwardDiffAD{5}}(0.01, 10)
+
+    if init_theta !== nothing
+        varinfo = Turing.VarInfo(etas_model);
+        etas_model(varinfo, Turing.SampleFromPrior(), Turing.PriorContext(init_theta));
+        init_theta_arr = varinfo[Turing.SampleFromPrior()]
+        if threads
+            etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains, init_params = init_theta_arr)
+        else
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains, init_params = init_theta_arr)
+        end
+    else
+        if threads
+            etas_chain = sample(etas_model, etas_sampler, MCMCThreads(), nsteps, nchains)
+        else
+            etas_chain = mapreduce(c -> sample(etas_model, etas_sampler, nsteps), chainscat, 1:nchains)
+        end
+    end
+
+    return (etas_model, etas_chain)
 end

@@ -28,6 +28,6 @@ export simulate_ETAS, simulate_Poisson
 
 export ETASPriors, ScalarSPDELayerPriors, VectorSPDELayerPriors
 export ConstantRateParameters, OneLayerRateParameters, TwoLayerRateParameters
-export etas_sampling, ipp_sampling
+export etas_sampling, ipp_sampling, etas_priorsampling
 
 end
